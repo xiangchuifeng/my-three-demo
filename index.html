@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.142.0/build/three.min.js"></script>
+    <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+    <!-- <script src="../js/WebGL.js"></script> -->
+    <style>
+      canvas {
+        width: 100%;
+        height: 100%;
+      }
+      #info {
+        position: absolute;
+        left: 1em;
+        top: 1em;
+        background: rgba(0,0,0,.8);
+        padding: .5em;
+        color: white;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body style="height: 100vh">
+    <canvas id="c"></canvas>
+    <div id="info">12</div>
+    <script type="module">
+      import { GUI } from "https://threejs.org/examples/jsm/libs/lil-gui.module.min.js";
+
+      const infoElem = document.querySelector('#info');
+
+      function genSunEarthSys() {
+        let three = THREE;
+        const canvas = document.querySelector("#c");
+
+        const scene = new three.Scene();
+        const renderer = new three.WebGLRenderer({ canvas });
+        renderer.setClearColor(0xaaaaaa);
+        renderer.shadowMap.enabled = true;
+
+        function makeCamera(fov=40){
+           // camera
+          let w = document.body.offsetWidth;
+          let h = document.body.offsetHeight;
+          // let fov = 40;
+          let aspect = 2 || w / h;
+          let near = 0.1;
+          let far = 1000;
+          const camera = new three.PerspectiveCamera(fov, aspect, near, far);
+          return camera;
+        }
+        // 全局摄像头
+        let camera = makeCamera();
+        // camera.position.set(8,0.5,0).multiplyScalar(4);
+        // camera.position.set(5,1.2,0).multiplyScalar(4);
+        camera.position.set(8,4,10).multiplyScalar(4);
+        // camera.position.set(10,0,0).multiplyScalar(4);
+        // camera.position.set(8,1.4,0).multiplyScalar(4);
+        camera.lookAt(0,0,0);
+
+         // light1
+        let lightColor = 0xffffff;
+        let intensity = 1;
+        let light1 = new three.DirectionalLight(lightColor, intensity);
+        light1.position.set(0,20,0);
+        scene.add(light1)
+        light1.castShadow = true;
+        light1.shadow.mapWidth = 2048;
+        light1.shadow.mapHeight = 2048;
+
+        const d = 50;
+        light1.shadow.camera.left = -d;
+        light1.shadow.camera.right = d;
+        light1.shadow.camera.top = d;
+        light1.shadow.camera.bottom = -d;
+        light1.shadow.camera.near = 1;
+        light1.shadow.camera.far = 50;
+        light1.shadow.bias = 0.001;
+
+        // light2
+        let light2 = new three.DirectionalLight(lightColor, intensity);
+        light2.position.set(1,2,4);
+        // scene.add(light2)
+
+        // 添加场景平面
+        let groundGeometry = new three.PlaneGeometry(50,50);
+        let groundMaterial = new three.MeshPhongMaterial({color:0xbb7722})
+        let groundMesh = new three.Mesh(groundGeometry,groundMaterial);
+        groundMesh.rotation.x = Math.PI*-0.5;
+        groundMesh.receiveShadow = true;
+        scene.add(groundMesh);
+
+        // 坦克 系统
+        let tankSystem = new three.Object3D();
+        scene.add(tankSystem);
+
+        // 组成坦克：身体，轮子，炮管
+        let tw = 4,th=1,tlen=8; 
+        let tankBodyGeometry = new three.BoxGeometry(tw,th,tlen)
+        let tankBodyMaterial = new three.MeshPhongMaterial({color:0x6688aa});
+        let tankBodyMesh = new three.Mesh(tankBodyGeometry,tankBodyMaterial);
+        tankBodyMesh.position.y = 1.4;
+        tankSystem.add(tankBodyMesh);
+
+        // 坦克角度 镜头
+        const tankCameraFov = 135;
+        const tankCamera = makeCamera(tankCameraFov);
+        tankCamera.position.y = 3;
+        tankCamera.position.z = -6;
+        tankCamera.rotation.y = Math.PI;
+        tankBodyMesh.add(tankCamera);
+
+        // 轮子
+        let radius = 1;
+        let radiusTop = radius;
+        let radiusBottom = radius;
+        let tkThickness = 0.5;
+        let tkSegments = 6;
+        let tkWheelGeometry = new three.CylinderGeometry(radiusTop,radiusBottom,tkThickness,tkSegments);
+        let tkWheelMaterial = new three.MeshPhongMaterial({color:0x888888});
+        let wheelPostions = [
+          [tw/2+tkThickness/2,-th/2,tlen/3],
+          [tw/2+tkThickness/2,-th/2,-tlen/3],
+
+          [-(tw/2+tkThickness/2),-th/2,tlen/3],
+          [-(tw/2+tkThickness/2),-th/2,-tlen/3],
+        ]
+        let wheelMeshs = wheelPostions.map(position=>{
+          let mesh = new three.Mesh(tkWheelGeometry,tkWheelMaterial);
+          mesh.position.set(...position);
+          mesh.rotation.z = Math.PI*0.5;
+          mesh.castShadow = true;
+          tankBodyMesh.add(mesh);
+          return mesh;
+        })
+        // 坦克屋盖
+        let domeRadius = tw/2;
+        let domeSegments = 12;
+        let domeGeometry = new three.SphereGeometry(domeRadius,domeSegments)
+        let domeMaterial = tankBodyMaterial;
+        let domeMesh = new three.Mesh(domeGeometry,domeMaterial);
+        tankBodyMesh.add(domeMesh)
+        domeMesh.position.y = th/2;
+        // 坦克炮管
+        let turretSystem = new three.Object3D();
+        turretSystem.scale.set(5,5,5);
+        // turretSystem.position.y = th/2+domeRadius/2;
+        // turretSystem.position.z = tlen*0.75/2;
+
+        turretSystem.position.y = 1.2;
+        // turretSystem.position.z = tlen*0.75/2/2;
+
+        let turretW = th/2/5;
+        let turretH = th/2/5;
+        let turretLen = tlen*0.75/5;
+        let turretGeometry = new three.BoxGeometry(turretW,turretH,turretLen);
+        let turretMaterial = tankBodyMaterial;
+        let turretMesh = new three.Mesh(turretGeometry,turretMaterial);
+        turretMesh.castShadow = true;
+        turretMesh.position.z = turretLen*0.3
+        // turretMesh.position.x = turretLen*0.3
+        turretSystem.add(turretMesh);
+        tankBodyMesh.add(turretSystem);
+        // domeMesh.add(turretSystem)
+
+        // 坦克运动轨迹
+        let InsVector2 = (x,y)=>new three.Vector2(x,y);
+        const curve = new three.SplineCurve([
+          InsVector2(-10,0),
+          InsVector2(-5,5),
+          InsVector2(0,0),
+          InsVector2(5,-5),
+          InsVector2(20,0),
+          InsVector2(10, 10 ),
+          InsVector2( -5, 10 ),
+          InsVector2( -10, -10 ),
+          InsVector2(-20, -8 ),
+          InsVector2( -10, 0 ),
+        ])
+        
+        const trackPoints = curve.getPoints(50);
+        const trackGeometry = new three.BufferGeometry().setFromPoints(trackPoints);
+        const trackLineMaterial = new three.LineBasicMaterial({color:0xffa000});
+        const trackObject = new three.Line(trackGeometry,trackLineMaterial);
+        trackObject.rotation.x = Math.PI*0.5;
+        trackObject.position.y = 0;
+        scene.add(trackObject);
+
+        const tankPosition = InsVector2();
+        const tankTarget = InsVector2();
+        const targetPosition = new three.Vector3();
+
+
+        // 坦克目标系统
+        const targetSystem = new three.Object3D();
+        // 目标几何体
+        const targetGeometry = new three.SphereGeometry(0.5,6,3);
+        const targetMaterial = new three.MeshPhongMaterial({color:0x00ff00})
+        const targetMesh = new three.Mesh(targetGeometry,targetMaterial);
+        targetMesh.castShadow = true;
+        // 坦克目标立面系统
+        const targetElevation = new THREE.Object3D();
+
+        // const targetBob = new three.Object3D();
+
+        scene.add(targetSystem);
+        targetSystem.add(targetElevation)
+        targetElevation.add(targetMesh)
+        targetElevation.position.z = tlen * 2;
+        targetElevation.position.y = 8;
+
+
+        const cameras = [
+          { cam: camera, desc: 'detached camera', },
+          { cam: tankCamera, desc: 'above back of tank', },
+        ];
+
+        
+        
+        // 目标横向运动系统
+
+
+
+        
+       
+        // camera.position.set(0, 150, 0);
+        // console.log(camera.up);
+        // camera.up.set(0, 0, 1);
+        // camera.lookAt(0, 0, 0);
+
+       
+        // scene.add(light);
+
+        // // objects
+        // let objects = [];
+        // let radius = 1;
+        // let wSegments = 6;
+        // let hSegments = 10;
+        // // sun geometry
+        // let sphereGeometry = new three.SphereGeometry(radius, wSegments, hSegments);
+        // // sun metrials
+        // let sunMetrials = new three.MeshPhongMaterial({ emissive: 0xffaa00 });
+        // // sun mesh
+        // let sunMesh = new three.Mesh(sphereGeometry, sunMetrials);
+        // sunMesh.scale.set(10, 10, 10);
+
+        // // object solar system
+        // let solarSystem = new three.Object3D();
+        // scene.add(solarSystem);
+        // objects.push(solarSystem);
+
+        // // solarSystem add sun;
+        // solarSystem.add(sunMesh);
+        // objects.push(sunMesh);
+
+        // let earthSystem = new three.Object3D();
+        // earthSystem.position.x = 35;
+        // solarSystem.add(earthSystem);
+        // objects.push(earthSystem);
+
+        // // earth mesh
+        // let earthGeometry = new three.SphereGeometry(radius, wSegments, hSegments);
+        // let earthMaterial = new three.MeshPhongMaterial({ emissive: 0x22aa00, color: 0x2233ff });
+        // let earthMesh = new three.Mesh(earthGeometry, earthMaterial);
+        // earthMesh.scale.set(4, 4, 4);
+
+        // // earthSystem add earthMesh
+        // earthSystem.add(earthMesh);
+        // objects.push(earthMesh);
+
+        // let moonSystem = new three.Object3D();
+        // moonSystem.position.x = 6;
+        // earthSystem.add(moonSystem);
+        // objects.push(moonSystem);
+
+        // // moon mesh
+        // let moonGeometry = new three.SphereGeometry(radius, wSegments, hSegments);
+        // let moonMaterial = new three.MeshPhongMaterial({ emissive: 0xaaaaff, color: 0x559999 });
+        // let moonMesh = new three.Mesh(moonGeometry, moonMaterial);
+        // // moonMesh.position.x=2;
+        // moonMesh.scale.set(1.5, 1.5, 1.5);
+        // moonSystem.add(moonMesh);
+        // objects.push(moonMesh);
+
+        function resizeRendererToDisplaySize(renderer) {
+          let canvas = renderer.domElement;
+          let w = canvas.offsetWidth;
+          let h = canvas.offsetHeight;
+          let needResize = canvas.width != w || canvas.height != h;
+          if (needResize) {
+            renderer.setSize(w, h);
+          }
+          return needResize;
+        }
+
+        // // Turns both axes and grid visible on/off
+        // // lil-gui requires a property that returns a bool
+        // // to decide to make a checkbox so we make a setter
+        // // and getter for `visible` which we can tell lil-gui
+        // // to look at.
+        // class AxisGridHelper {
+        //   constructor(node, units = 10) {
+        //     const axes = new THREE.AxesHelper();
+        //     axes.material.depthTest = false;
+        //     axes.renderOrder = 2; // after the grid
+        //     node.add(axes);
+            
+        //     let colorCenterLine = 0x00ff33;
+        //     let colorGrid = 0xaabbee;
+        //     const grid = new THREE.GridHelper(units, units,colorCenterLine,colorGrid);
+        //     grid.material.depthTest = false;
+        //     grid.renderOrder = 1;
+        //     node.add(grid);
+
+        //     this.grid = grid;
+        //     this.axes = axes;
+        //     this.visible = false;
+        //   }
+        //   get visible() {
+        //     return this._visible;
+        //   }
+        //   set visible(v) {
+        //     this._visible = v;
+        //     this.grid.visible = v;
+        //     this.axes.visible = v;
+        //   }
+        // }
+        // // helpers
+        // function makeAxisGrid(node, label, unit) {
+        //   let helper = new AxisGridHelper(node, unit);
+        //   gui.add(helper, "visible").name(label);
+        // }
+
+        // makeAxisGrid(solarSystem, "solarSystem", 25);
+        // makeAxisGrid(sunMesh, "sunMesh");
+        // makeAxisGrid(earthSystem, "earthSystem");
+        // makeAxisGrid(earthMesh, "earthMesh");
+        // makeAxisGrid(moonSystem, "moonSystem");
+        // makeAxisGrid(moonMesh, "moonMesh");
+
+        function renderFn(time) {
+          
+          time *= 0.001;
+          console.log(time)
+          if (resizeRendererToDisplaySize(renderer)) {
+            let canvas = renderer.domElement;
+            // camera.aspect = canvas.offsetWidth / canvas.offsetHeight;
+            // camera.updateProjectionMatrix();
+
+            cameras.forEach((cameraInfo) => {
+              const camera = cameraInfo.cam;
+              camera.aspect = canvas.clientWidth / canvas.clientHeight;
+              camera.updateProjectionMatrix();
+            });
+          }
+
+          // move tank
+          const tankTime = time * .05;
+          curve.getPointAt(tankTime % 1, tankPosition);
+          curve.getPointAt((tankTime + 0.01) % 1, tankTarget);
+          tankSystem.position.set(tankPosition.x, 0, tankPosition.y);
+          tankSystem.lookAt(tankTarget.x, 0, tankTarget.y);
+
+          wheelMeshs.forEach(item=>{
+            item.rotation.x = time*3;
+          })
+
+          // move target
+          // 以y轴转圈
+          targetSystem.rotation.y = time*0.27;
+          targetMesh.position.y = Math.sin(time * 2) * 4;
+          targetMesh.rotation.x = time * 7;
+          targetMesh.rotation.y = time * 13;
+          targetMaterial.color.setHSL(time%1,1,0.3)
+
+          // 炮管瞄准目标
+          targetMesh.getWorldPosition(targetPosition);
+          turretSystem.lookAt(targetPosition);
+          domeMesh.lookAt(targetPosition);
+
+          // objects.forEach((item, i) => {
+          //   if (i === 0) {
+          //     item.rotation.y = time * 0.1;
+          //   } else if (i == 2) {
+          //     item.rotation.y = time * 1;
+          //   } else if (i == 4) {
+          //     item.rotation.y = time * 1.5;
+          //   }
+          //   let axes = new three.AxesHelper();
+          //   axes.material.depthTest = false;
+          //   axes.renderOrder = 1;
+          //   item.add(axes);
+          //   // item.rotation.y = time*((i==2)||(i==3)?1:i==4?i*1.5:0.1)
+          // });
+          const camera0 = cameras[time * .5 % cameras.length | 0];
+          infoElem.textContent = camera.desc;
+
+
+          // renderer.render(scene, camera);
+          renderer.render(scene, camera0.cam);
+          requestAnimationFrame(renderFn);
+        }
+
+        requestAnimationFrame(renderFn);
+      }
+
+      genSunEarthSys();
+    </script>
+  </body>
+</html>
